@@ -1,0 +1,39 @@
+{
+    "format": "layers-model",
+    "generatedBy": "signspeaks-prototype",
+    "convertedBy": null,
+    "modelTopology": {
+        "class_name": "Sequential",
+        "config": {
+            "name": "sign_classifier",
+            "layers": [
+                {
+                    "class_name": "Dense",
+                    "config": {
+                        "units": 64,
+                        "activation": "relu",
+                        "input_shape": [
+                            63
+                        ]
+                    }
+                },
+                {
+                    "class_name": "Dense",
+                    "config": {
+                        "units": 32,
+                        "activation": "relu"
+                    }
+                },
+                {
+                    "class_name": "Dense",
+                    "config": {
+                        "units": 5,
+                        "activation": "softmax"
+                    }
+                }
+            ]
+        }
+    },
+    "weightsManifest": [],
+    "note": "This is a placeholder model topology for academic demonstration. The actual classification is handled by the rule-based mock classifier in sign_classifier.js."
+}

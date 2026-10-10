@@ -1,0 +1,188 @@
+/* ============================================
+   SignSpeaks – Floating Overlay Styles
+   Draggable, semi-transparent caption panel
+   ============================================ */
+
+#signspeaks-overlay {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 340px;
+    max-height: 420px;
+    z-index: 2147483647;
+    /* highest possible */
+    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+    border-radius: 14px;
+    background: rgba(15, 15, 26, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: #e0e0e0;
+    transition: opacity 0.25s ease;
+}
+
+#signspeaks-overlay.hidden {
+    display: none;
+}
+
+/* ---- Header / Drag handle ---- */
+#signspeaks-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: grab;
+    user-select: none;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#signspeaks-header:active {
+    cursor: grabbing;
+}
+
+#signspeaks-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #00d2ff, #7b2ff7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+#signspeaks-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#signspeaks-header-controls button {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: #aaa;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+#signspeaks-header-controls button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+/* ---- Caption area ---- */
+#signspeaks-captions {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    max-height: 320px;
+    scroll-behavior: smooth;
+}
+
+/* Scrollbar styling */
+#signspeaks-captions::-webkit-scrollbar {
+    width: 4px;
+}
+
+#signspeaks-captions::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#signspeaks-captions::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+/* Individual caption entries */
+.signspeaks-entry {
+    margin-bottom: 6px;
+    padding: 4px 0;
+    animation: signspeaks-fadein 0.3s ease;
+}
+
+@keyframes signspeaks-fadein {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.signspeaks-entry .label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.signspeaks-entry .label.speech {
+    color: #00d2ff;
+}
+
+.signspeaks-entry .label.sign {
+    color: #7b2ff7;
+}
+
+.signspeaks-entry .text {
+    color: #e0e0e0;
+}
+
+/* ---- Footer status bar ---- */
+#signspeaks-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    font-size: 10px;
+    color: #666;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+#signspeaks-footer .indicators {
+    display: flex;
+    gap: 10px;
+}
+
+.indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.indicator-dot.active {
+    box-shadow: 0 0 6px currentColor;
+}
+
+.indicator-dot.speech-dot {
+    color: #00d2ff;
+    background: #00d2ff;
+}
+
+.indicator-dot.sign-dot {
+    color: #7b2ff7;
+    background: #7b2ff7;
+}
+
+.indicator-dot.inactive {
+    background: #444;
+    color: #444;
+    box-shadow: none;
+}

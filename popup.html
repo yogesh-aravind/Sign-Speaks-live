@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignSpeaks</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">🤟</div>
+      <h1>SignSpeaks</h1>
+      <p class="tagline">Sign Language Accessibility</p>
+    </div>
+
+    <!-- Master Toggle -->
+    <div class="control-group master">
+      <div class="control-label">
+        <span class="icon">⚡</span>
+        <span>Enable Extension</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-extension">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Speech Toggle -->
+    <div class="control-group" id="speech-group">
+      <div class="control-label">
+        <span class="icon">🎙️</span>
+        <span>Speech-to-Text</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-speech">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Sign Toggle -->
+    <div class="control-group" id="sign-group">
+      <div class="control-label">
+        <span class="icon">✋</span>
+        <span>Sign-to-Text</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-sign">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Status -->
+    <div class="status" id="status">
+      <span class="status-dot off"></span>
+      <span id="status-text">Disabled</span>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>Open Google Meet or Zoom to use</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

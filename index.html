@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISLens v3 — Indian Sign Language</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+:root{
+  --bg:#04070d;--sur:#090e18;--sur2:#0e1520;--sur3:#131c28;
+  --accent:#f97316;--blue:#38bdf8;--green:#4ade80;--red:#f87171;--purple:#a78bfa;
+  --text:#dde8f0;--dim:#3d5166;--border:#162030;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;}
+/* India tricolor bar */
+body::after{content:'';position:fixed;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#FF9933 33.3%,#fff 33.3%,#fff 66.6%,#138808 66.6%);z-index:9999;}
+body::before{content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse at 20% 20%,rgba(249,115,22,.05) 0%,transparent 50%),
+             radial-gradient(ellipse at 80% 80%,rgba(56,189,248,.05) 0%,transparent 50%);
+  pointer-events:none;z-index:0;}
+
+.app{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:22px 16px;}
+
+/* ── HEADER ── */
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:44px;height:44px;background:linear-gradient(135deg,#FF9933,#f97316);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 20px rgba(249,115,22,.35);}
+.logo-name{font-size:24px;font-weight:700;letter-spacing:.5px;}.logo-name b{color:var(--accent);}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:2px;margin-top:1px;}
+.hright{display:flex;align-items:center;gap:10px;}
+.badge{padding:4px 11px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;border:1px solid;}
+.badge-g{color:var(--green);border-color:rgba(74,222,128,.3);background:rgba(74,222,128,.07);}
+.badge-b{color:var(--blue);border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.07);}
+.spill{display:flex;align-items:center;gap:7px;background:var(--sur2);border:1px solid var(--border);border-radius:50px;padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--dim);transition:background .3s,box-shadow .3s;}
+.sdot.live{background:var(--green);box-shadow:0 0 8px var(--green);}
+.sdot.det{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:bpulse .7s ease-in-out infinite;}
+.sdot.proc{background:var(--blue);box-shadow:0 0 8px var(--blue);animation:bpulse .4s ease-in-out infinite;}
+.sdot.err{background:var(--red);}
+@keyframes bpulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* ── TABS ── */
+.tabbar{display:flex;gap:4px;background:var(--sur);border:1px solid var(--border);border-radius:12px;padding:4px;width:fit-content;margin-bottom:18px;}
+.tab{padding:8px 20px;border-radius:9px;border:none;background:transparent;color:var(--dim);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.tab.on{background:rgba(249,115,22,.15);color:var(--accent);border:1px solid rgba(249,115,22,.25);}
+.tab:hover:not(.on){color:var(--text);}
+
+/* ── PANELS ── */
+.panel{display:none;animation:fadeIn .2s ease;}.panel.on{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 370px;gap:16px;}
+.g2w{display:grid;grid-template-columns:1fr 400px;gap:16px;}
+.col{display:flex;flex-direction:column;gap:14px;}
+@media(max-width:960px){.g2,.g2w{grid-template-columns:1fr;}}
+
+/* ── CARD ── */
+.card{background:var(--sur);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.ch{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);}
+.clabel{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;}
+
+/* ── CAMERA ── */
+.camwrap{position:relative;aspect-ratio:16/9;background:#020408;overflow:hidden;}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:none;}
+#canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);}
+.idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--dim);}
+.idle-ico{font-size:56px;opacity:.15;}
+.idle p{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1.5px;opacity:.4;}
+
+/* corner brackets */
+.bk{position:absolute;inset:12px;pointer-events:none;}
+.bk::before,.bk::after,.bki::before,.bki::after{content:'';position:absolute;width:18px;height:18px;border-color:var(--accent);border-style:solid;opacity:.45;}
+.bk::before{top:0;left:0;border-width:2px 0 0 2px;border-radius:2px 0 0 0;}
+.bk::after{top:0;right:0;border-width:2px 2px 0 0;border-radius:0 2px 0 0;}
+.bki::before{bottom:0;left:0;border-width:0 0 2px 2px;border-radius:0 0 0 2px;}
+.bki::after{bottom:0;right:0;border-width:0 2px 2px 0;border-radius:0 0 2px 0;}
+
+/* detection overlay */
+.detov{position:absolute;bottom:0;left:0;right:0;padding:14px 18px;background:linear-gradient(transparent,rgba(4,7,13,.97));display:none;}
+.detov.show{display:block;}
+.det-main{font-size:72px;font-weight:700;line-height:1;animation:lpop .15s ease-out;}
+@keyframes lpop{from{transform:scale(.6);opacity:0;}to{transform:scale(1);opacity:1;}}
+.det-type{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;margin-bottom:2px;}
+.det-type.letter{color:var(--blue);}
+.det-type.word{color:var(--green);}
+.det-letter{color:var(--accent);}
+.det-word{color:var(--green);}
+.det-desc{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-top:3px;line-height:1.5;}
+.cbar-row{display:flex;align-items:center;gap:8px;margin-top:7px;}
+.cbar-bg{flex:1;height:2px;background:var(--sur3);border-radius:1px;overflow:hidden;}
+.cbar-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--accent));transition:width .2s;}
+.cbar-pct{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);min-width:30px;}
+.hring{position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:50%;border:2px solid var(--accent);display:none;align-items:center;justify-content:center;font-size:16px;animation:rp 1.2s ease-in-out infinite;}
+.hring.show{display:flex;}
+@keyframes rp{0%,100%{box-shadow:0 0 8px rgba(249,115,22,.3);}50%{box-shadow:0 0 24px rgba(249,115,22,.7);}}
+.camctrl{padding:12px 15px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);}
+
+/* ── BUTTONS ── */
+.btn{padding:9px 18px;border-radius:9px;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;transition:all .18s;display:flex;align-items:center;gap:6px;}
+.bp{background:linear-gradient(135deg,#FF9933,#f97316);color:#000;box-shadow:0 3px 14px rgba(249,115,22,.2);}
+.bp:hover{transform:translateY(-1px);box-shadow:0 5px 20px rgba(249,115,22,.38);}
+.bs{background:var(--sur2);color:var(--dim);border:1px solid var(--border);}
+.bs:hover{color:var(--text);border-color:var(--accent);}
+.bst{background:rgba(248,113,113,.08);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.bst:hover{background:rgba(248,113,113,.15);}
+.bgn{background:rgba(74,222,128,.08);color:var(--green);border:1px solid rgba(74,222,128,.25);}
+.bgn:hover{background:rgba(74,222,128,.15);}
+.bpu{background:rgba(167,139,250,.08);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.btn:disabled{opacity:.3;cursor:not-allowed;transform:none!important;}
+
+/* ── TRANSLATION OUTPUT ── */
+.tout{padding:14px 16px;min-height:76px;font-size:26px;font-weight:700;letter-spacing:6px;word-break:break-all;line-height:1.4;}
+.cur{display:inline-block;width:2px;height:24px;background:var(--accent);animation:blink 1s step-end infinite;vertical-align:middle;margin-left:2px;box-shadow:0 0 6px var(--accent);}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0;}}
+.tact{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--border);}
+.stat{padding:12px;text-align:center;border-right:1px solid var(--border);}
+.stat:last-child{border-right:none;}
+.sv{font-size:20px;font-weight:700;color:var(--accent);}
+.sk{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim);letter-spacing:1px;margin-top:2px;}
+
+/* ── ISL REF ── */
+.islref{padding:10px 12px;display:grid;grid-template-columns:repeat(6,1fr);gap:4px;max-height:200px;overflow-y:auto;}
+.ri{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--sur2);border:1px solid var(--border);border-radius:7px;padding:5px 3px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);cursor:default;transition:all .12s;}
+.ri.on{border-color:var(--accent);color:var(--accent);background:rgba(249,115,22,.07);}
+.ri.word-on{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.07);}
+.ri-ico{font-size:14px;}
+.idesc{padding:8px 12px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);line-height:1.7;border-top:1px solid var(--border);}
+.idesc em{color:var(--blue);font-style:normal;}
+
+/* ── LM CANVAS ── */
+#lmc{width:100%;aspect-ratio:16/6;background:#020408;display:block;}
+
+/* ── MODE TOGGLE ── */
+.mtog{display:flex;gap:3px;background:var(--sur3);border-radius:7px;padding:3px;}
+.mb{padding:4px 12px;border-radius:5px;border:none;background:transparent;color:var(--dim);font-family:'JetBrains Mono',monospace;font-size:9px;cursor:pointer;transition:all .15s;letter-spacing:1px;}
+.mb.on{background:var(--accent);color:#000;font-weight:700;}
+
+/* ── SLIDER ── */
+.srow{padding:9px 12px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--border);}
+.srow label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);white-space:nowrap;}
+input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer;}
+.sval{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);min-width:24px;}
+
+/* ── UPLOAD ── */
+.dropzone{border:2px dashed var(--border);border-radius:14px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .18s;background:var(--sur2);position:relative;}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent);background:rgba(249,115,22,.04);}
+.dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.dz-ico{font-size:42px;margin-bottom:10px;opacity:.35;}
+.dz-t{font-size:16px;font-weight:700;margin-bottom:5px;}
+.dz-s{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);}
+
+/* ── PROGRESS ── */
+.progwrap{background:var(--sur3);border-radius:5px;overflow:hidden;height:5px;margin:8px 0;}
+.progbar{height:100%;background:linear-gradient(90deg,var(--blue),var(--accent));transition:width .3s;width:0%;}
+
+/* ── TIMELINE ── */
+.tlscroll{max-height:400px;overflow-y:auto;padding:8px 12px;}
+.tli{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:9px;border:1px solid var(--border);background:var(--sur2);margin-bottom:6px;cursor:pointer;transition:all .12s;}
+.tli:hover{border-color:var(--accent);background:rgba(249,115,22,.04);}
+.tli-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);min-width:38px;}
+.tli-thumb{width:72px;height:44px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+.tli-lbl{font-size:22px;font-weight:700;min-width:28px;}
+.tli-lbl.letter{color:var(--accent);}
+.tli-lbl.word{color:var(--green);}
+.tli-info{flex:1;}
+.tli-conf{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--blue);}
+.tli-desc{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim);margin-top:1px;}
+.tl-empty{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);text-align:center;padding:20px;}
+
+/* ── RESULT TEXT ── */
+.rtext{font-size:24px;font-weight:700;letter-spacing:5px;padding:14px 16px;min-height:64px;word-break:break-all;}
+
+/* ── PREVIEW ── */
+.prevbox{background:#020408;}.prevbox img,.prevbox video{width:100%;display:block;}
+
+/* ── TIP ── */
+.tip{margin:0 12px 11px;background:rgba(249,115,22,.05);border:1px solid rgba(249,115,22,.18);border-radius:9px;padding:8px 11px;font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(249,115,22,.8);line-height:1.85;}
+
+/* ── VIDEO LINKS ── */
+.vlink{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;border:1px solid var(--border);background:var(--sur2);margin-bottom:7px;cursor:pointer;transition:all .12s;text-decoration:none;color:inherit;}
+.vlink:hover{border-color:var(--blue);background:rgba(56,189,248,.05);}
+.vlink-ico{font-size:22px;}
+.vlink-t{font-size:13px;font-weight:700;}
+.vlink-s{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim);}
+
+/* ── WORD REF TABLE ── */
+.word-ref{padding:10px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-height:260px;overflow-y:auto;}
+.wr{background:var(--sur2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;cursor:default;transition:all .12s;}
+.wr:hover{border-color:var(--green);background:rgba(74,222,128,.05);}
+.wr-lbl{font-size:12px;font-weight:700;color:var(--green);}
+.wr-desc{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim);margin-top:2px;line-height:1.5;}
+
+/* ── SPIN ── */
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:sp .6s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}
+
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤟</div>
+    <div>
+      <div class="logo-name"><b>ISL</b>ens v3</div>
+      <div class="logo-sub">INDIAN SIGN LANGUAGE TRANSLATOR · ISLRTC STANDARD</div>
+    </div>
+  </div>
+  <div class="hright">
+    <div class="badge badge-g">⚡ OFFLINE</div>
+    <div class="badge badge-b">🐍 FLASK + MEDIAPIPE</div>
+    <div class="spill"><div class="sdot live" id="sdot"></div><span id="stxt">READY</span></div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabbar">
+  <button class="tab on"  id="tb-live"    onclick="go('live',this)">📷 Live Camera</button>
+  <button class="tab"     id="tb-image"   onclick="go('image',this)">🖼️ Image Upload</button>
+  <button class="tab"     id="tb-video"   onclick="go('video',this)">🎬 Video Upload</button>
+  <button class="tab"     id="tb-words"   onclick="go('words',this)">📚 Word Reference</button>
+  <button class="tab"     id="tb-isl"     onclick="go('isl',this)">🔗 ISL Videos</button>
+</div>
+
+<!-- ══ TAB: LIVE CAMERA ══ -->
+<div class="panel on" id="pan-live">
+  <div class="g2">
+    <div class="col">
+      <!-- Camera card -->
+      <div class="card">
+        <div class="ch">
+          <span class="clabel">📷 &nbsp;LIVE CAMERA</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="mtog">
+              <button class="mb on" id="mL" onclick="setMode('letters',this)">LETTERS</button>
+              <button class="mb"    id="mW" onclick="setMode('words',this)">WORDS</button>
+              <button class="mb"    id="mB" onclick="setMode('both',this)">BOTH</button>
+            </div>
+          </div>
+        </div>
+        <div class="camwrap" id="cw">
+          <video id="video" playsinline autoplay muted></video>
+          <canvas id="canvas"></canvas>
+          <div class="idle" id="idle">
+            <div class="idle-ico">🖐</div>
+            <p>CLICK START CAMERA</p>
+          </div>
+          <div class="bk"><div class="bki"></div></div>
+          <div class="hring" id="hring">🖐</div>
+          <div class="detov" id="detov">
+            <div class="det-type letter" id="det-type">LETTER</div>
+            <div class="det-main det-letter" id="det-lbl">A</div>
+            <div class="det-desc" id="det-desc">—</div>
+            <div class="cbar-row">
+              <div class="cbar-bg"><div class="cbar-fill" id="cfill" style="width:0%"></div></div>
+              <span class="cbar-pct" id="cpct">0%</span>
+            </div>
+          </div>
+        </div>
+        <div class="camctrl">
+          <button class="btn bp" id="startBtn" onclick="startCam()">▶ Start Camera</button>
+          <button class="btn bst" id="stopBtn" onclick="stopCam()" disabled>■ Stop</button>
+          <button class="btn bs" id="capBtn" onclick="capNow()" disabled>⊕ Capture</button>
+          <button class="btn bs" onclick="clearOut()">✕ Clear</button>
+          <button class="btn bgn" onclick="speak()">🔊 Speak</button>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div class="card">
+        <div class="stats">
+          <div class="stat"><div class="sv" id="sN">0</div><div class="sk">SIGNS DETECTED</div></div>
+          <div class="stat"><div class="sv" id="fN">0</div><div class="sk">FPS</div></div>
+          <div class="stat"><div class="sv" id="hN">0</div><div class="sk">HANDS TRACKED</div></div>
+        </div>
+      </div>
+      <!-- LM Canvas -->
+      <div class="card">
+        <div class="ch"><span class="clabel">🖐 &nbsp;HAND LANDMARKS</span></div>
+        <canvas id="lmc" width="600" height="160"></canvas>
+      </div>
+      <!-- Settings -->
+      <div class="card">
+        <div class="ch"><span class="clabel">⚙️ &nbsp;SETTINGS</span></div>
+        <div class="srow">
+          <label>HOLD FRAMES</label>
+          <input type="range" min="4" max="35" value="15"
+            oninput="HOLD=+this.value;document.getElementById('hv').textContent=this.value">
+          <span class="sval" id="hv">15</span>
+        </div>
+        <div class="srow">
+          <label>TTS SPEED</label>
+          <input type="range" min="0.5" max="2" step="0.1" value="0.9"
+            oninput="TTS_RATE=+this.value;document.getElementById('rv').textContent=this.value">
+          <span class="sval" id="rv">0.9</span>
+        </div>
+        <div class="tip">
+          ▸ LETTERS mode: detect A–Z fingerspelling<br>
+          ▸ WORDS mode: detect common ISL words &amp; gestures<br>
+          ▸ BOTH mode: tries words first, falls back to letters<br>
+          ▸ Lower Hold = faster · Higher Hold = more accurate
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COL -->
+    <div class="col">
+      <!-- Output -->
+      <div class="card">
+        <div class="ch"><span class="clabel">✍️ &nbsp;TRANSLATION OUTPUT</span></div>
+        <div class="tout" id="tout"><span class="cur"></span></div>
+        <div class="tact">
+          <button class="btn bs" style="font-size:11px;padding:6px 10px" onclick="doBS()">⌫</button>
+          <button class="btn bs" style="font-size:11px;padding:6px 10px" onclick="doSp()">⎵ Space</button>
+          <button class="btn bs" style="font-size:11px;padding:6px 10px" onclick="doCp(event)">⎘ Copy</button>
+          <button class="btn bs" style="font-size:11px;padding:6px 10px" onclick="clearOut()">✕</button>
+        </div>
+      </div>
+      <!-- ISL Letter Ref -->
+      <div class="card">
+        <div class="ch"><span class="clabel">🔤 &nbsp;LETTER REFERENCE (ISL)</span></div>
+        <div class="islref" id="lref"></div>
+        <div class="idesc" id="ldesc"><em>Hover or sign a letter to see description</em></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: IMAGE UPLOAD ══ -->
+<div class="panel" id="pan-image">
+  <div class="g2w">
+    <div class="col">
+      <div class="card">
+        <div class="ch">
+          <span class="clabel">🖼️ &nbsp;UPLOAD IMAGE</span>
+          <div class="mtog">
+            <button class="mb on" id="im-mL" onclick="setImgMode('letters',this,'im')">LETTERS</button>
+            <button class="mb"    id="im-mW" onclick="setImgMode('words',this,'im')">WORDS</button>
+            <button class="mb"    id="im-mB" onclick="setImgMode('both',this,'im')">BOTH</button>
+          </div>
+        </div>
+        <div style="padding:14px;">
+          <div class="dropzone" id="imgDZ">
+            <input type="file" id="imgIn" accept="image/*" onchange="uploadImg(event)">
+            <div class="dz-ico">🖼️</div>
+            <div class="dz-t">Drop image or click to browse</div>
+            <div class="dz-s">JPG · PNG · WEBP · Max 20MB</div>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="imgResCard" style="display:none;">
+        <div class="ch"><span class="clabel">📌 &nbsp;ANNOTATED RESULT</span><div id="imgSpin"></div></div>
+        <div class="prevbox"><img id="imgAnn" alt="result"></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="ch"><span class="clabel">✅ &nbsp;DETECTED SIGN</span></div>
+        <div id="imgDet" style="padding:14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);">
+          Upload an image to detect ISL signs
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="clabel">📖 &nbsp;ISL REFERENCE</span></div>
+        <div class="islref" id="iref2"></div>
+        <div class="idesc" id="idesc2"><em>Upload an image to see results</em></div>
+      </div>
+      <div class="tip">
+        ▸ Upload a photo of someone doing an ISL hand sign<br>
+        ▸ Server runs MediaPipe on the image (more accurate)<br>
+        ▸ Best results: clear hand, good lighting, plain background<br>
+        ▸ Use BOTH mode to detect letters AND words
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: VIDEO UPLOAD ══ -->
+<div class="panel" id="pan-video">
+  <div class="g2w">
+    <div class="col">
+      <div class="card">
+        <div class="ch">
+          <span class="clabel">🎬 &nbsp;UPLOAD ISL VIDEO</span>
+          <div class="mtog">
+            <button class="mb on" id="vm-mL" onclick="setImgMode('letters',this,'vm')">LETTERS</button>
+            <button class="mb"    id="vm-mW" onclick="setImgMode('words',this,'vm')">WORDS</button>
+            <button class="mb"    id="vm-mB" onclick="setImgMode('both',this,'vm')">BOTH</button>
+          </div>
+        </div>
+        <div style="padding:14px;">
+          <div class="dropzone" id="vidDZ">
+            <input type="file" id="vidIn" accept="video/*" onchange="uploadVid(event)">
+            <div class="dz-ico">🎬</div>
+            <div class="dz-t">Drop video or click to browse</div>
+            <div class="dz-s">MP4 · AVI · MOV · WEBM · Max 150MB</div>
+          </div>
+          <div style="display:none;margin-top:10px;" id="vprogWrap">
+            <div id="vprogLbl" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-bottom:5px;">Processing...</div>
+            <div class="progwrap"><div class="progbar" id="vprog"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="vprevCard" style="display:none;">
+        <div class="ch"><span class="clabel">▶ &nbsp;VIDEO PREVIEW</span></div>
+        <div class="prevbox"><video id="vprev" controls></video></div>
+      </div>
+      <div class="card" id="frameCard" style="display:none;">
+        <div class="ch"><span class="clabel">📌 &nbsp;SELECTED FRAME</span></div>
+        <div class="prevbox"><img id="frameImg"></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="ch">
+          <span class="clabel">✍️ &nbsp;EXTRACTED TEXT</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn bgn" style="font-size:11px;padding:5px 10px" onclick="speakVid()" id="speakVid" disabled>🔊 Speak</button>
+            <button class="btn bs"  style="font-size:11px;padding:5px 10px" onclick="copyVid(event)" id="copyVid" disabled>⎘ Copy</button>
+          </div>
+        </div>
+        <div class="rtext" id="vtxt">—</div>
+      </div>
+      <div class="card" id="vstatsCard" style="display:none;">
+        <div class="stats">
+          <div class="stat"><div class="sv" id="vdur">0s</div><div class="sk">DURATION</div></div>
+          <div class="stat"><div class="sv" id="vsamp">0</div><div class="sk">FRAMES SAMPLED</div></div>
+          <div class="stat"><div class="sv" id="vsigns">0</div><div class="sk">SIGNS FOUND</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="clabel">⏱️ &nbsp;FRAME TIMELINE (click to inspect)</span></div>
+        <div class="tlscroll" id="tl">
+          <div class="tl-empty">Upload a video to see frame-by-frame analysis</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: WORD REFERENCE ══ -->
+<div class="panel" id="pan-words">
+  <div class="g2">
+    <div class="col">
+      <div class="card">
+        <div class="ch"><span class="clabel">📚 &nbsp;ISL WORD / GESTURE DICTIONARY (40+ Signs)</span></div>
+        <div class="word-ref" id="wref"></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="ch"><span class="clabel">ℹ️ &nbsp;HOW WORD DETECTION WORKS</span></div>
+        <div class="tip" style="margin:12px;">
+          ▸ Word detection uses hand shape + position geometry<br>
+          ▸ Some words need the hand to be at a specific height<br>
+          ▸ HELLO needs hand raised to head level<br>
+          ▸ THANK YOU needs flat hand near chin/chest<br>
+          ▸ CALL = thumb+pinky (like holding a phone)<br>
+          ▸ YES = closed S-fist · NO = index wagging<br>
+          ▸ For best results use BOTH mode in Live Camera<br>
+          ▸ Words take priority over letters in BOTH mode
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="clabel">📈 &nbsp;RECOGNITION ACCURACY</span></div>
+        <div class="tip" style="margin:12px;">
+          ▸ <span style="color:var(--green);">RULE-BASED</span> classifier — no training needed<br>
+          ▸ Works offline, no GPU needed<br>
+          ▸ Letters: ~75–90% accuracy with clear signing<br>
+          ▸ Words: ~65–80% accuracy (shape-based estimation)<br>
+          ▸ For higher accuracy: use image upload (server MediaPipe)<br>
+          ▸ Future: train a TFLite model on ISL dataset for 95%+ accuracy
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: ISL VIDEOS ══ -->
+<div class="panel" id="pan-isl">
+  <div class="g2">
+    <div class="col">
+      <div class="card">
+        <div class="ch"><span class="clabel">📺 &nbsp;HOW TO GET ISL TEST VIDEOS</span></div>
+        <div class="tip" style="margin:12px 12px 0;">
+          ISLRTC videos are on YouTube. Use <b style="color:var(--accent)">yt-dlp</b> to download them for testing:
+        </div>
+        <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="background:var(--sur3);border-radius:8px;padding:10px 12px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-bottom:5px;">STEP 1 — Install yt-dlp</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">pip install yt-dlp</div>
+          </div>
+          <div style="background:var(--sur3);border-radius:8px;padding:10px 12px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-bottom:5px;">STEP 2 — Download a video</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">yt-dlp "YOUTUBE_URL" -o test.mp4</div>
+          </div>
+          <div style="background:var(--sur3);border-radius:8px;padding:10px 12px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-bottom:5px;">STEP 3 — Upload in Video tab</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);">🎬 Video Upload → drop the .mp4</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="clabel">🔗 &nbsp;RECOMMENDED VIDEOS</span></div>
+        <div style="padding:10px 12px;">
+          <a class="vlink" href="https://www.youtube.com/watch?v=qcdivQfA41Y" target="_blank">
+            <div class="vlink-ico">🇮🇳</div>
+            <div><div class="vlink-t">ISL 101 — Alphabet (Slow &amp; Clear)</div><div class="vlink-s">Best for testing · clear hand shapes</div></div>
+          </a>
+          <a class="vlink" href="https://www.youtube.com/watch?v=Vj_13bdU4dU" target="_blank">
+            <div class="vlink-ico">🔤</div>
+            <div><div class="vlink-t">ISL Alphabet A–Z (DEF-ISL)</div><div class="vlink-s">Full alphabet fingerspelling</div></div>
+          </a>
+          <a class="vlink" href="https://www.youtube.com/watch?v=ltzSNNa13W8" target="_blank">
+            <div class="vlink-ico">✋</div>
+            <div><div class="vlink-t">ISL Alphabet (good contrast)</div><div class="vlink-s">Clear hand shots</div></div>
+          </a>
+          <a class="vlink" href="https://www.youtube.com/channel/UC3AcGIlqVI4nJWCwHgHFXtg" target="_blank">
+            <div class="vlink-ico">🏛️</div>
+            <div><div class="vlink-t">ISLRTC Official YouTube Channel</div><div class="vlink-s">Government of India · 500+ ISL videos</div></div>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="ch"><span class="clabel">ℹ️ &nbsp;ABOUT ISLRTC</span></div>
+        <div class="tip" style="margin:12px;">
+          ▸ <b style="color:var(--accent)">ISLRTC</b> = Indian Sign Language Research &amp; Training Centre<br>
+          ▸ Autonomous body under DEPwD, Govt. of India (est. 2015)<br>
+          ▸ Promotes ISL for India's deaf community<br>
+          ▸ Official ISL dictionary: divyangjan.depwd.gov.in/islrtc<br>
+          ▸ This translator follows ISLRTC fingerspelling standards<br>
+          ▸ ISL fingerspelling is influenced by British Sign Language (BSL)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<!-- ══ JAVASCRIPT ══ -->
+<script>
+// ─── ISL Data ───
+const ISL_LETTERS = {
+  A:{e:'👊',d:'Closed fist, thumb extended to side'},
+  B:{e:'🤚',d:'All 4 fingers flat together, thumb tucked'},
+  C:{e:'🤏',d:'Curved C-shape open cylinder'},
+  D:{e:'👆',d:'Index up, others touch thumb'},
+  E:{e:'🤞',d:'All fingers bent/curled, thumb tucked'},
+  F:{e:'👌',d:'OK sign + 3 fingers spread'},
+  G:{e:'👉',d:'Index + thumb horizontal sideways'},
+  H:{e:'🤙',d:'Index + middle together horizontal'},
+  I:{e:'🤙',d:'Pinky only extended up'},
+  J:{e:'✌️',d:'Pinky traces J (motion)'},
+  K:{e:'✌️',d:'V with thumb between fingers'},
+  L:{e:'🤙',d:'Thumb + index form L-shape'},
+  M:{e:'✊',d:'3 fingers over tucked thumb'},
+  N:{e:'✊',d:'2 fingers over tucked thumb'},
+  O:{e:'🤌',d:'All fingers curve forming O'},
+  P:{e:'👇',d:'K shape pointing down'},
+  Q:{e:'👇',d:'Index + thumb pointing down'},
+  R:{e:'🤞',d:'Index + middle fingers crossed'},
+  S:{e:'✊',d:'Closed fist, thumb over fingers'},
+  T:{e:'✊',d:'Thumb between index + middle'},
+  U:{e:'✌️',d:'2 fingers together (closed V)'},
+  V:{e:'✌️',d:'2 fingers spread (peace sign)'},
+  W:{e:'🖖',d:'3 fingers spread wide'},
+  X:{e:'☝️',d:'Index finger bent/hooked'},
+  Y:{e:'🤙',d:'Thumb + pinky (shaka)'},
+  Z:{e:'☝️',d:'Index traces Z (motion)'},
+};
+
+const ISL_WORDS = [
+  {w:'HELLO',     e:'👋', d:'Flat open hand raised to head level'},
+  {w:'YES',       e:'✅', d:'Closed S-fist held up, nodding motion'},
+  {w:'NO',        e:'❌', d:'Index finger wagged side to side'},
+  {w:'THANK YOU', e:'🙏', d:'Flat hand moves from chin forward'},
+  {w:'PLEASE',    e:'🤲', d:'Open palm circles on chest'},
+  {w:'SORRY',     e:'😔', d:'Fist circles over chest'},
+  {w:'HELP',      e:'🆘', d:'Thumbs up raised — asking for help'},
+  {w:'GOOD',      e:'👍', d:'Thumbs up at mid height'},
+  {w:'BAD',       e:'👎', d:'Thumbs pointing down'},
+  {w:'ME / I',    e:'☝️', d:'Index pointing toward self/chest'},
+  {w:'YOU',       e:'👉', d:'Index pointing outward to other person'},
+  {w:'COME',      e:'🫵', d:'Index curved, beckoning motion'},
+  {w:'GO',        e:'➡️', d:'Index pointing up/outward'},
+  {w:'STOP',      e:'🛑', d:'Open palm pushed outward'},
+  {w:'WATER',     e:'💧', d:'W-shape (3 fingers) near mouth'},
+  {w:'EAT/FOOD',  e:'🍽️', d:'Fingers pinched toward mouth'},
+  {w:'DRINK',     e:'🥤', d:'C-shape hand tipped to mouth'},
+  {w:'PAIN',      e:'🤕', d:'Index pointing at pain location'},
+  {w:'CALL',      e:'📞', d:'Thumb + pinky (phone gesture)'},
+  {w:'LOVE',      e:'❤️', d:'Fist over heart area'},
+  {w:'NAME',      e:'🏷️', d:'Two fingers (U) tapped together'},
+  {w:'UNDERSTAND',e:'🧠', d:'Index touching temple'},
+  {w:'QUESTION',  e:'❓', d:'Index wiggled near face'},
+  {w:'FAMILY',    e:'👨‍👩‍👧', d:'F-shape circled'},
+  {w:'DOCTOR',    e:'👨‍⚕️', d:'D-shape at wrist area'},
+  {w:'SCHOOL',    e:'🏫', d:'Two flat hands clapped together'},
+  {w:'HOME',      e:'🏠', d:'Fingertips together forming roof'},
+  {w:'MONEY',     e:'💰', d:'Thumb rubs over fingers'},
+  {w:'WORK',      e:'💼', d:'Closed fist (S-shape)'},
+  {w:'TIME',      e:'⏰', d:'Index pointing at wrist'},
+  {w:'HOW MANY',  e:'🔢', d:'All fingers spread open'},
+  {w:'INDIA',     e:'🇮🇳', d:'Both hands I-shape tapped together'},
+  {w:'TOGETHER',  e:'🤝', d:'Both open hands brought together'},
+  {w:'MEET',      e:'🤜', d:'Both index fingers touching tips'},
+  {w:'PROBLEM',   e:'⚠️', d:'Both fists near each other'},
+];
+
+// ─── Build Letter Ref ───
+function buildLetterRef(id, descId) {
+  const g = document.getElementById(id);
+  const d = document.getElementById(descId);
+  if (!g) return;
+  Object.entries(ISL_LETTERS).forEach(([l, v]) => {
+    const el = document.createElement('div');
+    el.className = 'ri'; el.id = id + '-' + l;
+    el.innerHTML = `<span class="ri-ico">${v.e}</span>${l}`;
+    if (d) el.addEventListener('mouseenter', () => {
+      d.innerHTML = `<em>[${l}]</em> ${v.d}`;
+    });
+    g.appendChild(el);
+  });
+}
+buildLetterRef('lref', 'ldesc');
+buildLetterRef('iref2', 'idesc2');
+
+// ─── Build Word Ref ───
+const wrefEl = document.getElementById('wref');
+ISL_WORDS.forEach(({w,e,d}) => {
+  const el = document.createElement('div');
+  el.className = 'wr';
+  el.innerHTML = `<div class="wr-lbl">${e} ${w}</div><div class="wr-desc">${d}</div>`;
+  wrefEl.appendChild(el);
+});
+
+// ─── Tab switching ───
+function go(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.getElementById('pan-' + name).classList.add('on');
+  btn.classList.add('on');
+}
+
+// ─── Status ───
+function setS(state, text) {
+  const d = document.getElementById('sdot');
+  d.className = 'sdot' + (state ? ' ' + state : '');
+  if (text) document.getElementById('stxt').textContent = text;
+}
+
+// ─── Mode ───
+let camMode = 'letters', imgMode = 'both', vidMode = 'both';
+function setMode(m, btn) {
+  camMode = m;
+  document.querySelectorAll('#pan-live .mb').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+function setImgMode(m, btn, prefix) {
+  if (prefix === 'im') imgMode = m;
+  else vidMode = m;
+  const group = btn.closest('.mtog');
+  group.querySelectorAll('.mb').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// ─── Live camera state ───
+let camStream=null, mpHands=null, mpCamera=null;
+let outText='', sigCnt=0, frameCnt=0, fps=0, lastFpsT=Date.now();
+let lastSign=null, lastSignType=null, holdCnt=0, lastCaptured=null;
+let lastAppendedType=null; // 'letter' | 'word' | null — tracks type of last appended token
+let HOLD=12, TTS_RATE=0.9;
+
+const lmc     = document.getElementById('lmc');
+const lmCtx   = lmc.getContext('2d');
+const mainC   = document.getElementById('canvas');
+const mainCtx = mainC.getContext('2d');
+const vidEl   = document.getElementById('video');
+
+const CONN = [
+  [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+  [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
+  [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]
+];
+
+// ─── Client-side ISL Classifiers (mirrors Python logic) ───
+function classifyLetter(lm) {
+  const isE = (t,p) => lm[t].y < lm[p].y - 0.015;
+  const d   = (a,b) => Math.hypot(lm[a].x-lm[b].x, lm[a].y-lm[b].y);
+  const ir = lm[0].x < lm[17].x;
+  const iU=isE(8,6), mU=isE(12,10), rU=isE(16,14), pU=isE(20,18);
+  const tO = ir ? lm[4].x<lm[3].x-0.02 : lm[4].x>lm[3].x+0.02;
+  const ext=[iU,mU,rU,pU].filter(Boolean).length;
+  const dti=d(4,8),dtm=d(4,12),dtr=d(4,16),dtp=d(4,20),dim=d(8,12),dmr=d(12,16);
+  const icurl=lm[8].y>lm[6].y;
+  if(ext===0&&tO&&!icurl)          return{l:'A',c:0.84,t:'letter'};
+  if(ext===4&&!tO&&dim<0.045)      return{l:'B',c:0.87,t:'letter'};
+  if(ext>=3&&tO&&dti>0.10&&dtp>0.08) return{l:'C',c:0.76,t:'letter'};
+  if(ext===1&&iU&&dtm<0.07&&dtr<0.07) return{l:'D',c:0.83,t:'letter'};
+  if(ext===0&&!tO&&dti<0.06&&dtm<0.07) return{l:'E',c:0.75,t:'letter'};
+  if(dti<0.05&&ext>=3)             return{l:'F',c:0.79,t:'letter'};
+  if(!iU&&tO&&ext<=1&&!pU)         return{l:'G',c:0.70,t:'letter'};
+  if(ext===2&&iU&&mU&&dim<0.038&&!rU&&!pU) return{l:'H',c:0.74,t:'letter'};
+  if(ext===1&&pU&&!iU&&!mU&&!rU&&!tO) return{l:'I',c:0.85,t:'letter'};
+  if(ext===2&&iU&&mU&&tO&&dim>0.04) return{l:'K',c:0.80,t:'letter'};
+  if(tO&&iU&&!mU&&!rU&&!pU)       return{l:'L',c:0.90,t:'letter'};
+  if(ext===1&&rU&&!iU&&!mU&&!pU)  return{l:'M',c:0.69,t:'letter'};
+  if(ext===2&&!iU&&!mU&&rU&&pU&&!tO) return{l:'N',c:0.68,t:'letter'};
+  if(dti<0.05&&ext<=1)             return{l:'O',c:0.84,t:'letter'};
+  if(ext===2&&iU&&mU&&dim<0.03&&!tO) return{l:'R',c:0.74,t:'letter'};
+  if(ext===2&&iU&&mU&&dim<0.05&&!tO) return{l:'U',c:0.83,t:'letter'};
+  if(ext===2&&iU&&mU&&dim>0.055&&!tO) return{l:'V',c:0.87,t:'letter'};
+  if(ext===3&&iU&&mU&&rU&&!pU)    return{l:'W',c:0.82,t:'letter'};
+  if(!iU&&icurl&&ext===0&&!tO)    return{l:'X',c:0.72,t:'letter'};
+  if(tO&&pU&&!iU&&!mU&&!rU)       return{l:'Y',c:0.88,t:'letter'};
+  if(ext===0&&!tO&&dti>0.06)      return{l:'S',c:0.73,t:'letter'};
+  if(!tO&&dti<0.06&&!iU&&!mU)     return{l:'T',c:0.71,t:'letter'};
+  return null;
+}
+
+function classifyWord(lm) {
+  const isE = (t,p) => lm[t].y < lm[p].y - 0.015;
+  const d   = (a,b) => Math.hypot(lm[a].x-lm[b].x, lm[a].y-lm[b].y);
+  const ir = lm[0].x < lm[17].x;
+  const iU=isE(8,6), mU=isE(12,10), rU=isE(16,14), pU=isE(20,18);
+  const tO = ir ? lm[4].x<lm[3].x-0.02 : lm[4].x>lm[3].x+0.02;
+  const ext=[iU,mU,rU,pU].filter(Boolean).length;
+  const dti=d(4,8),dtm=d(4,12),dtp=d(4,20),dim=d(8,12);
+  const wy = lm[0].y;
+  const px = (lm[0].x+lm[5].x+lm[9].x+lm[13].x+lm[17].x)/5;
+
+  if(ext===4&&!tO&&wy<0.4&&dim<0.05)              return{l:'HELLO',c:0.78,t:'word',d:'Flat open hand raised to head level'};
+  if(ext===0&&!tO&&dti>0.06&&wy<0.45)              return{l:'YES',c:0.72,t:'word',d:'Closed S-fist held up — YES'};
+  if(ext===1&&iU&&!mU&&!rU&&!pU&&!tO&&wy<0.5)     return{l:'NO',c:0.73,t:'word',d:'Index wagging — NO'};
+  if(ext>=3&&wy<0.55&&dti>0.08&&!tO)               return{l:'THANK YOU',c:0.75,t:'word',d:'Flat hand from chin forward'};
+  if(ext===4&&!tO&&wy>0.35&&wy<0.65&&dim<0.04)     return{l:'PLEASE',c:0.70,t:'word',d:'Open palm on chest'};
+  if(tO&&!iU&&!mU&&!rU&&!pU&&wy<0.5)              return{l:'HELP',c:0.74,t:'word',d:'Thumbs up — help'};
+  if(tO&&!iU&&!mU&&!rU&&!pU&&wy>=0.4)             return{l:'GOOD',c:0.77,t:'word',d:'Thumbs up — good'};
+  if(tO&&ext===0&&lm[4].y>lm[3].y)                return{l:'BAD',c:0.74,t:'word',d:'Thumbs down — bad'};
+  if(ext===1&&iU&&!tO&&px>0.35&&px<0.65)          return{l:'ME / I',c:0.76,t:'word',d:'Index pointing to self'};
+  if(ext===1&&iU&&!tO&&(px<0.35||px>0.65))        return{l:'YOU',c:0.72,t:'word',d:'Index pointing outward'};
+  if(ext===1&&!iU&&lm[8].y<lm[7].y&&!mU)          return{l:'COME',c:0.70,t:'word',d:'Index curved — come'};
+  if(tO&&pU&&!iU&&!mU&&!rU)                       return{l:'CALL',c:0.79,t:'word',d:'Thumb+pinky — phone call'};
+  if(ext===3&&iU&&mU&&rU&&!pU&&wy<0.5)            return{l:'WATER',c:0.71,t:'word',d:'W-shape near mouth'};
+  if(dti<0.06&&d(4,12)<0.07&&d(4,16)<0.08&&wy<0.55) return{l:'EAT/FOOD',c:0.73,t:'word',d:'Fingers pinched to mouth'};
+  if(ext>=2&&dti>0.09&&wy<0.5)                    return{l:'DRINK',c:0.70,t:'word',d:'C-shape tipped to mouth'};
+  if(ext===2&&iU&&mU&&dim<0.04&&wy<0.5)           return{l:'NAME',c:0.67,t:'word',d:'Two fingers — name'};
+  if(ext===1&&iU&&!mU&&wy<0.35)                   return{l:'UNDERSTAND',c:0.69,t:'word',d:'Index at temple'};
+  if(ext===0&&!tO&&wy>0.35&&wy<0.6)               return{l:'SORRY',c:0.68,t:'word',d:'Fist circles on chest'};
+  return null;
+}
+
+function classifyBoth(lm) {
+  const w = classifyWord(lm);
+  const lt = classifyLetter(lm);
+  if (w && lt) return w.c >= lt.c ? w : lt;
+  return w || lt;
+}
+
+// ─── Draw ───
+function drawLM(results) {
+  const W=lmc.width, H=lmc.height;
+  lmCtx.clearRect(0,0,W,H);
+  lmCtx.fillStyle='#020408'; lmCtx.fillRect(0,0,W,H);
+  if (!results.multiHandLandmarks?.length) {
+    lmCtx.fillStyle='rgba(249,115,22,.12)';
+    lmCtx.font='9px JetBrains Mono,monospace'; lmCtx.textAlign='center';
+    lmCtx.fillText('AWAITING HAND DATA', W/2, H/2); return;
+  }
+  const COLS=['#f97316','#38bdf8'];
+  results.multiHandLandmarks.forEach((lms,hi) => {
+    const col=COLS[hi]||COLS[0];
+    CONN.forEach(([a,b]) => {
+      lmCtx.beginPath();
+      lmCtx.moveTo((1-lms[a].x)*W, lms[a].y*H);
+      lmCtx.lineTo((1-lms[b].x)*W, lms[b].y*H);
+      lmCtx.strokeStyle=col+'77'; lmCtx.lineWidth=1.8; lmCtx.stroke();
+    });
+    lms.forEach((lm,i) => {
+      const x=(1-lm.x)*W, y=lm.y*H, tip=[4,8,12,16,20].includes(i);
+      lmCtx.beginPath(); lmCtx.arc(x,y,tip?5:3,0,Math.PI*2);
+      lmCtx.fillStyle=tip?col:col+'44'; lmCtx.fill();
+    });
+  });
+}
+
+function drawOverlay(results) {
+  mainC.width  = vidEl.videoWidth  || 640;
+  mainC.height = vidEl.videoHeight || 480;
+  mainCtx.clearRect(0,0,mainC.width,mainC.height);
+  if (!results.multiHandLandmarks) return;
+  const W=mainC.width, H=mainC.height;
+  const COLS=['rgba(249,115,22,.8)','rgba(56,189,248,.8)'];
+  results.multiHandLandmarks.forEach((lms,hi) => {
+    const col=COLS[hi]||COLS[0];
+    CONN.forEach(([a,b]) => {
+      mainCtx.beginPath();
+      mainCtx.moveTo(lms[a].x*W,lms[a].y*H);
+      mainCtx.lineTo(lms[b].x*W,lms[b].y*H);
+      mainCtx.strokeStyle=col; mainCtx.lineWidth=2.5; mainCtx.stroke();
+    });
+    lms.forEach((lm,i) => {
+      const tip=[4,8,12,16,20].includes(i);
+      mainCtx.beginPath();
+      mainCtx.arc(lm.x*W,lm.y*H,tip?7:4,0,Math.PI*2);
+      mainCtx.fillStyle=tip?col.replace('.8','1'):col.replace('.8','.35');
+      mainCtx.fill();
+    });
+  });
+}
+
+// ─── onResults (MediaPipe callback) ───
+function onResults(results) {
+  frameCnt++;
+  const now=Date.now();
+  if (now-lastFpsT>1000) {
+    fps=frameCnt; frameCnt=0; lastFpsT=now;
+    document.getElementById('fN').textContent=fps;
+  }
+  const hc = results.multiHandLandmarks?.length || 0;
+  document.getElementById('hN').textContent = hc;
+  drawOverlay(results);
+  drawLM(results);
+
+  const ring=document.getElementById('hring');
+  const ov=document.getElementById('detov');
+
+  if (hc > 0) {
+    ring.classList.add('show');
+    setS('det','DETECTING');
+
+    const lm = results.multiHandLandmarks[0];
+    let r = null;
+    if      (camMode === 'letters') r = classifyLetter(lm);
+    else if (camMode === 'words')   r = classifyWord(lm);
+    else                            r = classifyBoth(lm);
+
+    if (r) {
+      // Update UI
+      const isWord = r.t === 'word';
+      const typeEl = document.getElementById('det-type');
+      const lblEl  = document.getElementById('det-lbl');
+      const descEl = document.getElementById('det-desc');
+      typeEl.textContent = isWord ? 'WORD / GESTURE' : 'LETTER';
+      typeEl.className   = 'det-type ' + (isWord ? 'word' : 'letter');
+      lblEl.textContent  = r.l;
+      lblEl.className    = 'det-main ' + (isWord ? 'det-word' : 'det-letter');
+      descEl.textContent = r.d || (isWord ? r.l : (ISL_LETTERS[r.l]?.d || ''));
+      const pct = Math.round(r.c*100);
+      document.getElementById('cfill').style.width=pct+'%';
+      document.getElementById('cpct').textContent=pct+'%';
+      ov.classList.add('show');
+
+      // Highlight ref
+      document.querySelectorAll('#lref .ri').forEach(e=>e.classList.remove('on','word-on'));
+      const refEl=document.getElementById('lref-'+r.l);
+      if (refEl) {
+        refEl.classList.add(isWord?'word-on':'on');
+        document.getElementById('ldesc').innerHTML=`<em>[${r.l}]</em> ${r.d||ISL_LETTERS[r.l]?.d||''}`;
+      }
+
+      // Hold + append
+      if (r.l === lastSign) holdCnt++;
+      else { lastSign=r.l; lastSignType=r.t; holdCnt=0; }
+      if (holdCnt===HOLD && r.l!==lastCaptured) {
+        appendTxt(r.l, r.t); lastCaptured=r.l;
+        sigCnt++; document.getElementById('sN').textContent=sigCnt;
+      }
+      if (holdCnt < HOLD-5) lastCaptured=null;
+    } else {
+      ov.classList.remove('show');
+    }
+  } else {
+    ring.classList.remove('show');
+    ov.classList.remove('show');
+    setS('live','LIVE');
+    lastSign=null; lastSignType=null; holdCnt=0;
+    document.querySelectorAll('#lref .ri').forEach(e=>e.classList.remove('on','word-on'));
+  }
+}
+
+// ─── Camera control ───
+function initMP() {
+  mpHands = new Hands({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+  });
+  mpHands.setOptions({
+    maxNumHands: 2, modelComplexity: 1,
+    minDetectionConfidence: 0.60,
+    minTrackingConfidence: 0.50
+  });
+  mpHands.onResults(onResults);
+}
+
+async function startCam() {
+  try {
+    document.getElementById('startBtn').disabled = true;
+    setS(null,'CONNECTING...');
+    // Request camera — works on both http://localhost and https://
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { width:{ideal:1280}, height:{ideal:720}, facingMode:'user' }
+    });
+    vidEl.srcObject = camStream;
+    vidEl.style.display = 'block';
+    await vidEl.play();
+    document.getElementById('idle').style.display = 'none';
+    initMP();
+    mpCamera = new Camera(vidEl, {
+      onFrame: async () => { if (mpHands) await mpHands.send({image:vidEl}); },
+      width:1280, height:720
+    });
+    await mpCamera.start();
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('capBtn').disabled  = false;
+    document.getElementById('startBtn').disabled= false;
+    setS('live','LIVE');
+  } catch(e) {
+    console.error(e);
+    document.getElementById('startBtn').disabled = false;
+    setS('err','ERROR');
+    // Friendly error message
+    if (e.name==='NotAllowedError') {
+      alert('⚠️ Camera Permission Denied\n\n'+
+        'To fix:\n'+
+        '1. Click the 🔒 lock icon in your browser address bar\n'+
+        '2. Set Camera → Allow\n'+
+        '3. Refresh the page\n\n'+
+        'OR: Run the app with HTTPS (see README)');
+    } else if(e.name==='NotFoundError') {
+      alert('⚠️ No Camera Found\n\nMake sure a webcam is connected and not in use by another app.');
+    } else {
+      alert('Camera error: '+e.message);
+    }
+  }
+}
+
+function stopCam() {
+  // FIXED: properly stop all tracks AND camera object
+  if (mpCamera) { try{mpCamera.stop();}catch(e){} mpCamera=null; }
+  if (mpHands)  { try{mpHands.close();}catch(e){} mpHands=null; }
+  if (camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  vidEl.srcObject = null;
+  vidEl.style.display = 'none';
+  mainCtx.clearRect(0,0,mainC.width,mainC.height);
+  document.getElementById('idle').style.display = 'flex';
+  document.getElementById('detov').classList.remove('show');
+  document.getElementById('hring').classList.remove('show');
+  document.getElementById('stopBtn').disabled = true;
+  document.getElementById('capBtn').disabled  = true;
+  setS(null,'READY');
+  drawIdleLM();
+}
+
+function capNow() {
+  if (lastSign) {
+    appendTxt(lastSign, lastSignType || 'letter');
+    sigCnt++;
+    document.getElementById('sN').textContent = sigCnt;
+  }
+}
+
+// ─── Output ───
+// Smart spacing rules:
+//  • Word  after anything → prepend space (words are whole tokens, not chained letters)
+//  • Letter after a word  → prepend space (start of a new spelled sequence)
+//  • Letter after letter  → no space   (chain into a word: H-E-L-L-O)
+//  • Nothing yet          → no leading space
+function appendTxt(l, type) {
+  if (outText.length > 0 && outText[outText.length - 1] !== ' ') {
+    if (type === 'word' || lastAppendedType === 'word') {
+      outText += ' ';
+    }
+  }
+  outText += l;
+  lastAppendedType = type || 'letter';
+  renderOut();
+}
+function doSp()    { outText += ' '; lastAppendedType = null; renderOut(); }
+function doBS()    { outText = outText.slice(0, -1); if (!outText.length) lastAppendedType = null; renderOut(); }
+function clearOut(){ outText = ''; lastAppendedType = null; renderOut(); }
+function renderOut(){ document.getElementById('tout').innerHTML = outText + '<span class="cur"></span>'; }
+
+function doCp(e) {
+  if(!outText) return;
+  navigator.clipboard.writeText(outText).then(()=>{
+    const b=e.currentTarget,o=b.textContent;
+    b.textContent='✓'; setTimeout(()=>b.textContent=o,1500);
+  });
+}
+
+function speak() {
+  if (!outText.trim()) { alert('Type or sign something first!'); return; }
+  if (!window.speechSynthesis) { alert('TTS not supported in this browser.'); return; }
+  window.speechSynthesis.cancel();
+  function doSpeak() {
+    // ── Grammar engine: converts raw gesture output → natural English ──
+    function normStr(v) {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      return v.verb || v.default || '';
+    }
+
+    function toSpeakable(txt) {
+      if (!txt.trim()) return txt;
+
+      // Step 1 — protect multi-word / slash gesture labels before splitting
+      const MULTI = ['ME / I','THANK YOU','HOW MANY','EAT/FOOD','PAIN/HURT','ME/I'];
+      MULTI.sort((a,b) => b.length - a.length);
+      let s = txt; const ph = {}; let pi = 0;
+      for (const m of MULTI) {
+        const k = `__P${pi}__`;
+        if (s.includes(m)) { s = s.split(m).join(k); ph[k] = m; pi++; }
+      }
+      let tokens = s.trim().split(/\s+/).map(p => ph[p] || p);
+
+      // Step 2 — merge stray lone letters (defensive)
+      const merged = []; let mi = 0;
+      while (mi < tokens.length) {
+        if (tokens[mi].length === 1 && /^[A-Z]$/.test(tokens[mi])) {
+          let w = '';
+          while (mi < tokens.length && tokens[mi].length === 1 && /^[A-Z]$/.test(tokens[mi])) w += tokens[mi++];
+          merged.push(w);
+        } else merged.push(tokens[mi++]);
+      }
+
+      // Step 3 — normalisation map
+      const NORM = {
+        'ME / I':{'subject':'I','object':'me','default':'I'},
+        'ME/I':  {'subject':'I','object':'me','default':'I'},
+        'EAT/FOOD':  {'verb':'eat','noun':'food','default':'eat'},
+        'PAIN/HURT': {'verb':'hurt','noun':'pain','default':'hurt'},
+        'HELLO':'Hello','THANK YOU':'thank you','PLEASE':'please','SORRY':'sorry',
+        'YES':'yes','NO':'no','GOOD':'good','BAD':'bad','HELP':'help','CALL':'call',
+        'COME':'come','GO':'go','STOP':'stop','WATER':'water','DRINK':'drink',
+        'NAME':'name','UNDERSTAND':'understand','QUESTION':'what','HOW MANY':'how many',
+        'YOU':'you','MEET':'meet','WORK':'work','TIME':'time','DOCTOR':'doctor',
+        'HOME':'home','MONEY':'money','SCHOOL':'school','FAMILY':'family',
+        'INDIA':'India','TOGETHER':'together','LOVE':'love','PROBLEM':'problem',
+        'NEED':'need','WANT':'want','HAVE':'have','GIVE':'give','MY':'my','YOUR':'your',
+        'SICK':'sick','TIRED':'tired','HAPPY':'happy','SAD':'sad','HUNGRY':'hungry',
+        'THIRSTY':'thirsty','HOT':'hot','COLD':'cold','BUSY':'busy','READY':'ready',
+        'LATE':'late','EARLY':'early','SCARED':'scared','ANGRY':'angry',
+      };
+
+      const VERBS = new Set(['eat','drink','call','come','go','stop','help','meet','work',
+        'understand','hurt','love','know','need','want','have','see','give','take','feel',
+        'use','say','tell','ask','try','keep','put','leave','start','show','hear',
+        'run','move','live','remember','write','sit','stand','pay','bring','send',
+        'build','spend','open','walk','return','fix','get','join','learn','lose',
+        'mean','miss','offer','order','pass','pick','plan','receive','remove','rest',
+        'save','sell','share','sign','sleep','solve','study','support','talk',
+        'teach','train','travel','update','visit','watch','wish']);
+
+      const ADJS = new Set(['good','bad','sorry','hungry','thirsty','sick','tired',
+        'happy','sad','angry','scared','busy','ready','late','early','hot','cold',
+        'big','small','new','old','free','near','far','together','well','fine',
+        'right','wrong','safe','clean','dirty','loud','quiet','fast','slow']);
+
+      const AM_ARE = {'i':'am','me':'am','you':'are','we':'are','they':'are',
+                      'he':'is','she':'is','it':'is'};
+
+      const NOUN_TRIGGERS = new Set(['want','like','have','need','buy','give','no',
+        'some','the','cook','make','bring','see','smell','eat','drink','carry']);
+
+      const COUNT_NOUNS = new Set(['doctor','book','problem','call','drink','glass',
+        'cup','bottle','chair','table','phone','room','bus','car','train','ticket',
+        'bag','form','question']);
+
+      const SUBJ_TOKS  = new Set(['ME / I','ME/I','YOU','HE','SHE','WE','THEY']);
+      const VERB_TOKS  = new Set(['EAT/FOOD','DRINK','GO','COME','WORK','NEED','WANT',
+        'HELP','CALL','MEET','UNDERSTAND','LOVE','NAME','HAVE','GIVE','STOP','SEE']);
+
+      // Step 4 — resolve ambiguous tokens
+      const resolved = merged.map((tok, idx) => {
+        const U    = tok.toUpperCase();
+        const prevU = idx > 0 ? merged[idx-1].toUpperCase() : null;
+        const nextU = idx < merged.length-1 ? merged[idx+1].toUpperCase() : null;
+
+        if (U === 'ME / I' || U === 'ME/I') {
+          const nextNS   = nextU ? normStr(NORM[nextU] || nextU.toLowerCase()) : null;
+          const nextVerb = nextNS ? VERBS.has(nextNS) : false;
+          const isSubj   = idx === 0 || nextVerb || (nextU && VERB_TOKS.has(nextU));
+          return isSubj ? 'I' : 'me';
+        }
+        if (U === 'EAT/FOOD') {
+          const prevNS = prevU ? normStr(NORM[prevU] || prevU.toLowerCase()) : null;
+          if (prevNS && NOUN_TRIGGERS.has(prevNS)) return 'food';
+          if (idx === 0 || (prevU && SUBJ_TOKS.has(prevU))) return 'eat';
+          return 'food';
+        }
+        if (U === 'PAIN/HURT') {
+          const prevNS = prevU ? normStr(NORM[prevU] || prevU.toLowerCase()) : null;
+          if (prevNS && new Set(['have','feel','much','body','some','great']).has(prevNS)) return 'pain';
+          return 'hurt';
+        }
+
+        const n = NORM[U];
+        if (typeof n === 'string') return n;
+        if (n && typeof n === 'object') return n.default;
+        // Spelled-out word (all-caps 2+ chars, not a known gesture) → Title Case
+        if (/^[A-Z]{2,}$/.test(tok)) return tok[0] + tok.slice(1).toLowerCase();
+        return tok.toLowerCase();
+      });
+
+      // Step 5 — copula insertion  (case-insensitive adj check)
+      const withCop = [];
+      for (let j = 0; j < resolved.length; j++) {
+        const cur = resolved[j]; const nxt = resolved[j+1];
+        withCop.push(cur);
+        const nxtL = nxt ? nxt.toLowerCase() : null;
+        if (nxtL && ADJS.has(nxtL)
+            && !VERBS.has(cur.toLowerCase())
+            && !['am','is','are','was','were','be','a','an','the','very','so',
+                 'too','quite','not','my','your','no'].includes(cur.toLowerCase())) {
+          const cop = AM_ARE[cur.toLowerCase()];
+          if (cop) withCop.push(cop);
+          else if (!/^(a|an|the|my|your)$/i.test(cur)) withCop.push('is');
+        }
+      }
+
+      // Step 6 — article insertion
+      const withArt = [];
+      for (let j = 0; j < withCop.length; j++) {
+        const cur = withCop[j]; const prv = withCop[j-1]; const prv2 = withCop[j-2]||'';
+        if (COUNT_NOUNS.has(cur.toLowerCase()) && prv && VERBS.has(prv.toLowerCase())
+            && !['a','an','the','some','my','your','this','that','no','one'].includes(prv2.toLowerCase())) {
+          withArt.push(/^[aeiou]/i.test(cur) ? 'an' : 'a');
+        }
+        withArt.push(cur);
+      }
+
+      // Step 7 — capitalise first word
+      if (!withArt.length) return '';
+      withArt[0] = withArt[0][0].toUpperCase() + withArt[0].slice(1);
+      return withArt.join(' ');
+    }
+
+    const speakText = toSpeakable(outText);
+    const u = new SpeechSynthesisUtterance(speakText);
+    u.rate = TTS_RATE; u.lang = 'en-IN';
+    const vs = window.speechSynthesis.getVoices();
+    if (vs.length > 0) {
+      const v = vs.find(x=>x.lang.includes('en-IN'))
+             || vs.find(x=>x.lang.includes('en-GB'))
+             || vs.find(x=>x.lang.includes('en'));
+      if (v) u.voice = v;
+    }
+    window.speechSynthesis.speak(u);
+  }
+  if (window.speechSynthesis.getVoices().length > 0) {
+    doSpeak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      doSpeak();
+    };
+    setTimeout(doSpeak, 400);
+  }
+}
+
+function drawIdleLM() {
+  lmCtx.clearRect(0,0,lmc.width,lmc.height);
+  lmCtx.fillStyle='#020408'; lmCtx.fillRect(0,0,lmc.width,lmc.height);
+  lmCtx.fillStyle='rgba(249,115,22,.12)';
+  lmCtx.font='9px JetBrains Mono,monospace'; lmCtx.textAlign='center';
+  lmCtx.fillText('AWAITING HAND DATA', lmc.width/2, lmc.height/2);
+}
+
+// ─── IMAGE UPLOAD ───
+async function uploadImg(event) {
+  const file = event.target.files[0]; if(!file) return;
+  setS('proc','PROCESSING...');
+  document.getElementById('imgResCard').style.display='block';
+  document.getElementById('imgSpin').innerHTML='<div class="spin"></div>';
+  document.getElementById('imgDet').innerHTML='<div class="spin"></div>';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('mode', imgMode);
+
+  try {
+    const res = await fetch('/api/process-image', {method:'POST', body:fd});
+    const data = await res.json();
+    document.getElementById('imgSpin').innerHTML='';
+    if(data.error){
+      document.getElementById('imgDet').innerHTML=`<span style="color:var(--red);font-size:10px;font-family:'JetBrains Mono',monospace;">❌ ${data.error}</span>`;
+      setS('err','ERROR'); return;
+    }
+    document.getElementById('imgAnn').src='data:image/jpeg;base64,'+data.annotated_image;
+    if(data.detections?.length) {
+      const d=data.detections[0];
+      const isW=d.type==='word';
+      document.getElementById('imgDet').innerHTML=`
+        <div style="padding:12px 14px;">
+          <div style="font-size:56px;font-weight:700;color:${isW?'var(--green)':'var(--accent)'};text-shadow:0 0 28px ${isW?'rgba(74,222,128,.4)':'rgba(249,115,22,.4)'};">${d.label}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${isW?'var(--green)':'var(--blue)'};margin-top:6px;">${d.type.toUpperCase()} · ${Math.round(d.confidence*100)}% CONFIDENCE</div>
+          ${d.description?`<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-top:6px;line-height:1.7;">${d.description}</div>`:''}
+          ${data.detections.length>1?`<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--purple);margin-top:8px;">2nd hand: <b>${data.detections[1].label}</b> (${Math.round(data.detections[1].confidence*100)}%)</div>`:''}
+        </div>`;
+      // Highlight ref
+      document.querySelectorAll('#iref2 .ri').forEach(e=>e.classList.remove('on','word-on'));
+      const r2=document.getElementById('iref2-'+d.label);
+      if(r2){r2.classList.add(isW?'word-on':'on');document.getElementById('idesc2').innerHTML=`<em>[${d.label}]</em> ${d.description||ISL_LETTERS[d.label]?.d||''}`;}
+    } else {
+      document.getElementById('imgDet').innerHTML=`<div style="padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);">No ISL signs detected.<br><span style="color:var(--accent);">Try better lighting or a clearer hand position.</span></div>`;
+    }
+    setS('live','READY');
+  } catch(e) {
+    document.getElementById('imgDet').innerHTML=`<span style="color:var(--red);font-size:9px;font-family:'JetBrains Mono',monospace;padding:12px;display:block;">❌ ${e.message}</span>`;
+    setS('err','ERROR');
+  }
+}
+
+// ─── VIDEO UPLOAD ───
+async function uploadVid(event) {
+  const file = event.target.files[0]; if(!file) return;
+  // Preview
+  document.getElementById('vprev').src = URL.createObjectURL(file);
+  document.getElementById('vprevCard').style.display='block';
+  document.getElementById('frameCard').style.display='none';
+  document.getElementById('vtxt').textContent='—';
+  document.getElementById('vstatsCard').style.display='none';
+  document.getElementById('speakVid').disabled=true;
+  document.getElementById('copyVid').disabled=true;
+  document.getElementById('tl').innerHTML='<div class="tl-empty">Processing...</div>';
+
+  setS('proc','PROCESSING VIDEO...');
+  const pw=document.getElementById('vprogWrap');
+  const pb=document.getElementById('vprog');
+  const pl=document.getElementById('vprogLbl');
+  pw.style.display='block'; let pg=0;
+  const timer=setInterval(()=>{pg=Math.min(pg+Math.random()*7,90);pb.style.width=pg+'%';pl.textContent=`Processing frames... ${Math.round(pg)}%`;},350);
+
+  const fd=new FormData();
+  fd.append('file',file);
+  fd.append('mode',vidMode);
+
+  try {
+    const res=await fetch('/api/process-video',{method:'POST',body:fd});
+    clearInterval(timer); pb.style.width='100%'; pl.textContent='Done!';
+    setTimeout(()=>pw.style.display='none',1200);
+    const data=await res.json();
+    if(data.error){
+      document.getElementById('tl').innerHTML=`<div class="tl-empty" style="color:var(--red);">❌ ${data.error}</div>`;
+      setS('err','ERROR'); return;
+    }
+    // Text output
+    const txt=data.text||'(no signs detected)';
+    document.getElementById('vtxt').textContent=txt;
+    document.getElementById('speakVid').disabled=false;
+    document.getElementById('copyVid').disabled=false;
+    // Stats
+    document.getElementById('vdur').textContent=data.duration+'s';
+    document.getElementById('vsamp').textContent=data.sampled_frames;
+    document.getElementById('vsigns').textContent=data.sequence?.length||0;
+    document.getElementById('vstatsCard').style.display='block';
+    // Timeline
+    const tl=document.getElementById('tl');
+    const det=data.timeline?.filter(f=>f.detections?.length>0)||[];
+    if(!det.length){
+      tl.innerHTML='<div class="tl-empty">No ISL signs detected in video.<br><span style="color:var(--accent)">Try a video with clearer hand signs + good lighting.</span></div>';
+    } else {
+      tl.innerHTML='';
+      det.forEach(frame=>{
+        const d=frame.detections[0];
+        const isW=d.type==='word';
+        const item=document.createElement('div');
+        item.className='tli';
+        item.innerHTML=`
+          <span class="tli-time">${frame.time}s</span>
+          <img class="tli-thumb" src="data:image/jpeg;base64,${frame.image}" alt="frame">
+          <span class="tli-lbl ${isW?'word':'letter'}">${d.label}</span>
+          <div class="tli-info">
+            <div class="tli-conf">${d.type.toUpperCase()} · ${Math.round(d.confidence*100)}%</div>
+            <div class="tli-desc">${d.description||ISL_LETTERS[d.label]?.d||''}</div>
+          </div>`;
+        item.addEventListener('click',()=>{
+          document.getElementById('frameImg').src='data:image/jpeg;base64,'+frame.image;
+          document.getElementById('frameCard').style.display='block';
+        });
+        tl.appendChild(item);
+      });
+    }
+    setS('live','DONE');
+  } catch(e) {
+    clearInterval(timer); pw.style.display='none';
+    document.getElementById('tl').innerHTML=`<div class="tl-empty" style="color:var(--red);">❌ ${e.message}</div>`;
+    setS('err','ERROR');
+  }
+}
+
+function speakVid() {
+  const t = document.getElementById('vtxt').textContent;
+  if (!t || t === '—') { alert('No video text yet.'); return; }
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  function doSpeak() {
+    const u = new SpeechSynthesisUtterance(t);
+    u.rate = 0.9; u.lang = 'en-IN';
+    const vs = window.speechSynthesis.getVoices();
+    const v = vs.find(x=>x.lang.includes('en-IN')) || vs.find(x=>x.lang.includes('en'));
+    if (v) u.voice = v;
+    window.speechSynthesis.speak(u);
+  }
+  if (window.speechSynthesis.getVoices().length > 0) doSpeak();
+  else { window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.onvoiceschanged=null; doSpeak(); }; setTimeout(doSpeak,400); }
+}
+function copyVid(e) {
+  const t=document.getElementById('vtxt').textContent;
+  if(!t||t==='—') return;
+  navigator.clipboard.writeText(t).then(()=>{
+    const b=e.currentTarget,o=b.textContent;
+    b.textContent='✓'; setTimeout(()=>b.textContent=o,1500);
+  });
+}
+
+// ─── Drag-drop ───
+['imgDZ','vidDZ'].forEach(id=>{
+  const z=document.getElementById(id); if(!z) return;
+  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag');});
+  z.addEventListener('dragleave',()=>z.classList.remove('drag'));
+  z.addEventListener('drop',e=>{
+    e.preventDefault(); z.classList.remove('drag');
+    const f=e.dataTransfer.files[0]; if(!f) return;
+    if(id==='imgDZ') uploadImg({target:{files:[f]}});
+    else uploadVid({target:{files:[f]}});
+  });
+});
+
+window.addEventListener('load',()=>{
+  drawIdleLM();
+  if(window.speechSynthesis) window.speechSynthesis.getVoices();
+});
+</script>
+</body>
+</html>

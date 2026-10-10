@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "SignSpeaks",
+  "version": "1.0.0",
+  "description": "Real-Time Sign Language Accessibility for Virtual Meetings – converts speech to text and sign language to text with a floating overlay.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://*.zoom.us/*"
+      ],
+      "js": [
+        "speech/speech.js",
+        "sign/sign_classifier.js",
+        "sign/mediapipe_setup.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/overlay.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "model/model.json",
+        "model/labels.json",
+        "assets/*"
+      ],
+      "matches": [
+        "https://meet.google.com/*",
+        "https://*.zoom.us/*"
+      ]
+    }
+  ]
+}
